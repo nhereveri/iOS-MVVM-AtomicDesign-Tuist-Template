@@ -1,0 +1,210 @@
+# .swiftlint.yml
+# SwiftLint configuration for iOS MVVM + Atomic Design template.
+# Tuist runs this as a build phase — see Project.swift → swiftLintScript.
+
+# ── Paths ────────────────────────────────────────────────────────────────────
+
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - Tuist
+  - DerivedData
+  - .build
+  - "**/*.generated.swift"    # Any generated files (e.g. from Sourcery / SwiftGen)
+
+# ── Rules: opt-in ────────────────────────────────────────────────────────────
+# These rules are disabled by default in SwiftLint and must be explicitly enabled.
+
+opt_in_rules:
+  - array_init
+  - closure_end_indentation
+  - closure_spacing
+  - collection_alignment
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - contains_over_range_nil_comparison
+  - discouraged_object_literal
+  - empty_collection_literal
+  - empty_count
+  - empty_string
+  - enum_case_associated_values_count
+  - explicit_init
+  - extension_access_modifier
+  - fallthrough
+  - fatal_error_message
+  - file_header
+  - first_where
+  - flatmap_over_map_reduce
+  - identical_operands
+  - joined_default_parameter
+  - last_where
+  - legacy_multiple
+  - let_var_whitespace
+  - literal_expression_end_indentation
+  - lower_acl_than_parent
+  - modifier_order
+  - multiline_arguments
+  - multiline_function_chains
+  - multiline_literal_brackets
+  - multiline_parameters
+  - multiline_parameters_brackets
+  - operator_usage_whitespace
+  - overridden_super_call
+  - prefer_self_type_over_type_of_self
+  - prefer_zero_over_explicit_init
+  - redundant_nil_coalescing
+  - redundant_type_annotation
+  - return_value_from_void_function
+  - shorthand_optional_binding
+  - single_test_class
+  - sorted_first_last
+  - sorted_imports
+  - static_operator
+  - toggle_bool
+  - trailing_closure
+  - unavailable_function
+  - unneeded_parentheses_in_closure_argument
+  - unowned_variable_capture
+  - untyped_error_in_catch
+  - vertical_parameter_alignment_on_call
+  - vertical_whitespace_between_cases
+  - vertical_whitespace_closing_braces
+  - weak_delegate
+  - yoda_condition
+
+# ── Rules: disabled ───────────────────────────────────────────────────────────
+# Disable rules that conflict with project conventions or SwiftFormat's ownership.
+
+disabled_rules:
+  - todo              # TODOs are tracked in issue tracker, not enforced here
+  - trailing_whitespace  # Handled by SwiftFormat
+
+# ── Rule Configuration ────────────────────────────────────────────────────────
+
+force_unwrapping: error
+force_cast: error
+force_try: error
+
+implicitly_unwrapped_optional:
+  severity: warning
+  # Only allow in test setUp methods
+  mode: all_except_iboutlets
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_comments: true
+  ignores_urls: true
+
+file_length:
+  warning: 400
+  error: 600
+  ignore_comment_only_lines: true
+
+type_body_length:
+  warning: 200
+  error: 350
+
+function_body_length:
+  warning: 40
+  error: 80
+
+cyclomatic_complexity:
+  warning: 10
+  error: 20
+
+function_parameter_count:
+  warning: 6
+  error: 8
+
+nesting:
+  type_level:
+    warning: 2
+  function_level:
+    warning: 3
+
+identifier_name:
+  min_length:
+    warning: 2
+  max_length:
+    warning: 50
+    error: 80
+  excluded:
+    - id
+    - x
+    - y
+    - z
+
+type_name:
+  min_length:
+    warning: 3
+  max_length:
+    warning: 50
+    error: 80
+
+multiline_arguments:
+  first_argument_location: next_line
+  only_enforce_after_first_closure_on_first_line: true
+
+vertical_whitespace:
+  max_empty_lines: 1
+
+# ── File Header Template ──────────────────────────────────────────────────────
+# Enforces consistent file headers across all Swift files.
+# Use "SWIFTLINT_CURRENT_FILENAME" to match any file name.
+
+file_header:
+  required_pattern: |
+                    \/\/
+                    \/\/  .*
+                    \/\/
+
+# ── Modifier Order ────────────────────────────────────────────────────────────
+
+modifier_order:
+  preferred_modifier_order:
+    - override
+    - acl
+    - setterACL
+    - dynamic
+    - mutating
+    - lazy
+    - final
+    - required
+    - convenience
+    - typeMethods
+    - owned
+
+# ── Custom Rules ──────────────────────────────────────────────────────────────
+
+custom_rules:
+  # Prevent use of ObservableObject in favour of @Observable (Swift Observation)
+  no_observable_object:
+    name: "ObservableObject Prohibited"
+    regex: "ObservableObject"
+    message: "Use @Observable (Swift Observation framework) instead of ObservableObject. See CLAUDE.md §5."
+    severity: error
+
+  # Prevent use of @Published in favour of @Observable stored properties
+  no_published:
+    name: "@Published Prohibited"
+    regex: "@Published"
+    message: "Use @Observable stored properties instead of @Published. See CLAUDE.md §5."
+    severity: error
+
+  # Prevent use of DispatchQueue in favour of async/await
+  no_dispatch_queue:
+    name: "DispatchQueue Prohibited"
+    regex: "DispatchQueue\\.main"
+    message: "Use async/await and @MainActor instead of DispatchQueue.main. See CLAUDE.md §11."
+    severity: error
+
+  # Enforce MARK sections in non-trivial types
+  mark_required:
+    name: "MARK Required"
+    regex: "^(class|struct|enum|actor|extension)\\s+\\w+"
+    message: "Types with more than 3 members must use // MARK: - sections. See CLAUDE.md §12."
+    severity: warning

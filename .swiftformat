@@ -1,0 +1,102 @@
+# .swiftformat
+# SwiftFormat configuration for iOS MVVM + Atomic Design template.
+# Tuist runs this as a build phase before SwiftLint — see Project.swift → swiftFormatScript.
+# Reference: https://github.com/nicklockwood/SwiftFormat/blob/main/Rules.md
+
+# ── Swift Version ─────────────────────────────────────────────────────────────
+
+--swiftversion 6.0
+
+# ── Indentation & Spacing ─────────────────────────────────────────────────────
+
+--indent 4                      # 4-space indentation (no tabs)
+--tabwidth 4
+--smarttabs enabled
+--indentcase false               # Don't indent case labels inside switch
+--ifdef no-indent                # Don't indent #if/#else blocks
+
+# ── Line Length ───────────────────────────────────────────────────────────────
+
+--maxwidth 120                   # Mirrors SwiftLint warning threshold
+
+# ── Blank Lines ───────────────────────────────────────────────────────────────
+
+--emptylines around-conditional-bodies    # Blank line around if/else/guard bodies
+--blanklinesbetweenchainedfunctions false # No extra blanks between chained calls
+
+# ── Trailing Content ──────────────────────────────────────────────────────────
+
+--trimwhitespace always          # Remove trailing whitespace on all lines
+--insertlines disabled           # Don't insert blank lines at start/end of scope
+--removelines disabled           # Don't remove intentional blank lines
+
+# ── Semicolons ────────────────────────────────────────────────────────────────
+
+--semicolons never               # Prohibit semicolons in all contexts
+
+# ── Braces ────────────────────────────────────────────────────────────────────
+
+--allman false                   # K&R brace style (opening brace on same line)
+--elseposition same-line         # `} else {` on same line as closing brace
+--guardelse same-line            # `guard ... else {` same line
+
+# ── Arguments & Parameters ───────────────────────────────────────────────────
+
+--wraparguments before-first     # Wrap arguments starting from the first argument
+--wrapparameters before-first    # Wrap function parameters before first
+--wrapcollections before-first   # Wrap collection literals before first element
+--wrapconditions before-first    # Wrap long conditions
+--closingparen balanced          # Closing paren aligns with opening line
+--wrapreturntype if-multiline    # Wrap return type only when parameters are wrapped
+--wraptypealiases before-first
+
+# ── Imports ───────────────────────────────────────────────────────────────────
+
+--importgrouping testable-last   # stdlib → third-party → @testable import
+
+# ── Unused Arguments ─────────────────────────────────────────────────────────
+
+--stripunusedargs closure-only   # Strip unused args only in closures (not functions)
+
+# ── Self ──────────────────────────────────────────────────────────────────────
+
+--self init-only                 # Require `self.` only in init to avoid capture ambiguity
+--selfrequired                   # List of functions that require explicit self (comma-separated)
+# --selfrequired MyLogger.log    # Example
+
+# ── Redundancy ────────────────────────────────────────────────────────────────
+
+--redundanttype infer-locals-only  # Remove redundant type annotations for local vars only
+--redundantbackticks false
+
+# ── Pattern Matching ─────────────────────────────────────────────────────────
+
+--patternlet hoist               # Hoist `let`/`var` in pattern matching to before the case
+
+# ── Optional Chaining ────────────────────────────────────────────────────────
+
+--shortoptionals always          # Use `Foo?` instead of `Optional<Foo>`
+
+# ── Comments ──────────────────────────────────────────────────────────────────
+
+--linebreakbeforecomment false   # Don't insert blank line before inline comments
+--marktypes always               # Enforce // MARK: - for extension declarations
+--markextensions always
+
+# ── Rules: explicitly enabled ────────────────────────────────────────────────
+
+--enable isEmpty                 # Prefer `.isEmpty` over `== ""`  / `== []`
+--enable numberFormatting        # Normalise numeric literals (1_000_000)
+--enable preferKeyPath           # Convert closures to KeyPaths where possible
+--enable redundantSelf           # Remove redundant `self.` outside init
+--enable sortImports             # Sort import statements alphabetically within groups
+--enable wrapMultilineStatementBraces   # Opening brace of multiline statement on own line
+--enable blankLinesBetweenImports       # Blank line between import groups
+
+# ── Rules: explicitly disabled ────────────────────────────────────────────────
+
+--disable trailingCommas         # SwiftLint handles trailing commas
+--disable andOperator            # Allow && in complex conditions for readability
+--disable typeSugar              # Keep Array<T> when used as function return types
+--disable initCoderUnavailable   # Not needed (no UIKit / Storyboards)
+--disable wrapEnumCases          # Allow single-line simple enum cases
