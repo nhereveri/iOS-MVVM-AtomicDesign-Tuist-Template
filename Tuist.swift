@@ -9,6 +9,10 @@ import ProjectDescription
 let config = Config(
     // Uncomment and fill in to enable Tuist Cloud (optional).
     // fullHandle: "organization/project-name",
-    compatibleXcodeVersions: .upToNextMajor("16.0"),
+
+    // .all accepts any Xcode version (16, 17, 26, ...).
+    // Using a fixed range like .upToNextMajor("16.0") breaks
+    // when Apple changes version naming (e.g. Xcode 26).
+    compatibleXcodeVersions: .all,
     swiftVersion: "6.0"
 )
