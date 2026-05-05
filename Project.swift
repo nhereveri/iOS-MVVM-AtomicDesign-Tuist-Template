@@ -275,8 +275,8 @@ private let devScheme: Scheme = .scheme(
         [
             .testableTarget(
                 target: .target("\(projectName)Tests"),
-                parallelizable: true,
-                randomExecutionOrdering: true
+                isParallelizable: true,
+                isRandomExecutionOrdering: true
             ),
         ],
         configuration: "Debug",
@@ -307,8 +307,8 @@ private let stagingScheme: Scheme = .scheme(
         [
             .testableTarget(
                 target: .target("\(projectName)Tests"),
-                parallelizable: true,
-                randomExecutionOrdering: true
+                isParallelizable: true,
+                isRandomExecutionOrdering: true
             ),
         ],
         configuration: "Debug",
@@ -332,8 +332,8 @@ private let uatScheme: Scheme = .scheme(
         [
             .testableTarget(
                 target: .target("\(projectName)Tests"),
-                parallelizable: true,
-                randomExecutionOrdering: true
+                isParallelizable: true,
+                isRandomExecutionOrdering: true
             ),
         ],
         configuration: "Debug",
@@ -357,8 +357,8 @@ private let productionScheme: Scheme = .scheme(
         [
             .testableTarget(
                 target: .target("\(projectName)Tests"),
-                parallelizable: true,
-                randomExecutionOrdering: true
+                isParallelizable: true,
+                isRandomExecutionOrdering: true
             ),
         ],
         configuration: "Debug",
