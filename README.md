@@ -362,31 +362,145 @@ tuist clean
 
 ## 9. Adding External Packages
 
-1. Open `Project.swift` and add the package to the `packages` array:
+All third-party Swift packages are managed exclusively through Tuist — never through Xcode's "Add Package Dependency" UI. Adding a package requires three steps: declaring it in `Project.swift`, linking it to the correct target, and wrapping it behind a clean internal API.
+
+### Step 1 — Declare the package in `Project.swift`
+
+Add an entry to the `packages` array at the top of the manifest:
 
 ```swift
 packages: [
     .remote(
-        url: "https://github.com/onevcat/Kingfisher",
-        requirement: .upToNextMajor(from: "7.0.0")
+        url: "https://github.com/airbnb/lottie-spm",
+        requirement: .upToNextMajor(from: "4.5.0")
     ),
 ],
 ```
 
-2. Add the dependency to the target that needs it:
+Available version requirements:
+
+| Requirement | When to use |
+|---|---|
+| `.upToNextMajor(from: "x.0.0")` | Recommended default — accepts patches and minor bumps |
+| `.upToNextMinor(from: "x.y.0")` | When the library has a history of breaking minor versions |
+| `.exact("x.y.z")` | When you need to pin a specific release (e.g. critical bug-fix) |
+| `.branch("main")` | Development only — never use in production |
+
+### Step 2 — Link the product to the app target
+
+Inside the `targets` array, add the dependency to the app target (not the test target, unless the package is a testing utility):
 
 ```swift
-dependencies: [
-    .external(name: "Kingfisher"),
-],
+.target(
+    name: projectName,
+    // …
+    dependencies: [
+        .external(name: "Lottie"),
+    ]
+)
 ```
 
-3. Fetch and regenerate:
+> If the package vends multiple products (e.g. `LottieUI` and `LottieCore`), add a separate `.external(name:)` entry for each product you need.
+
+### Step 3 — Fetch and regenerate
 
 ```bash
-tuist install
-tuist generate
+tuist install   # Resolves and caches the new package
+tuist generate  # Rebuilds the Xcode project with the new dependency linked
 ```
+
+---
+
+### Wrapping third-party SDKs — Lottie example
+
+Direct imports of third-party frameworks must **never** appear in Views, ViewModels, or business-logic types. Any external SDK must be wrapped behind a project-owned component so the rest of the codebase stays decoupled from it.
+
+For a UI library like Lottie the correct placement is an **Atom** in the Design System:
+
+**`Sources/DesignSystem/Atoms/LottieView.swift`**
+
+```swift
+import Lottie
+import SwiftUI
+
+/// A SwiftUI wrapper around Lottie's `LottieAnimationView`.
+///
+/// Renders a `.lottie` or `.json` animation bundled in the app's main bundle.
+/// Place this atom inside molecules or organisms — never directly in a Page.
+///
+/// ## Example
+///
+/// ```swift
+/// LottieView(animationName: "onboarding_welcome", loopMode: .loop)
+///     .frame(width: 240, height: 240)
+/// ```
+struct LottieView: UIViewRepresentable {
+
+    // MARK: - Properties
+
+    let animationName: String
+    var loopMode: LottieLoopMode = .playOnce
+    var animationSpeed: CGFloat = 1.0
+
+    // MARK: - UIViewRepresentable
+
+    func makeUIView(context: Context) -> LottieAnimationView {
+        let view = LottieAnimationView(name: animationName, bundle: .main)
+        view.contentMode = .scaleAspectFit
+        view.loopMode = loopMode
+        view.animationSpeed = animationSpeed
+        view.play()
+        return view
+    }
+
+    func updateUIView(_ uiView: LottieAnimationView, context: Context) {
+        uiView.loopMode = loopMode
+        uiView.animationSpeed = animationSpeed
+    }
+}
+```
+
+> `UIViewRepresentable` is the only permitted use of UIKit in this project (required to bridge Lottie into SwiftUI). The `import Lottie` statement must stay confined to this file.
+
+#### Using the atom in a molecule
+
+Once the atom exists, consumers reference the wrapper — never Lottie directly:
+
+```swift
+// Sources/DesignSystem/Molecules/SuccessCard.swift
+import SwiftUI
+
+/// A card that plays a success animation alongside a confirmation message.
+struct SuccessCard: View {
+
+    // MARK: - Properties
+
+    let title: String
+    let subtitle: String
+
+    // MARK: - Body
+
+    var body: some View {
+        VStack(spacing: .spacing16) {
+            LottieView(animationName: "success_checkmark", loopMode: .playOnce)
+                .frame(width: 120, height: 120)
+
+            Text(title)
+                .font(.headlineLarge)
+                .foregroundStyle(.textPrimary)
+
+            Text(subtitle)
+                .font(.bodyMedium)
+                .foregroundStyle(.textSecondary)
+        }
+        .padding(.spacing24)
+    }
+}
+```
+
+#### Placing animation files
+
+Drop `.lottie` or `.json` animation files in `Resources/Assets.xcassets` (as a data asset) or directly in `Resources/Animations/`. Reference them by file name without extension in `LottieView(animationName:)`.
 
 ---
 

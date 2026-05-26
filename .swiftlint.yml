@@ -100,8 +100,8 @@ line_length:
   ignores_urls: true
 
 file_length:
-  warning: 400
-  error: 600
+  warning: 300
+  error: 400
   ignore_comment_only_lines: true
 
 type_body_length:
@@ -201,6 +201,22 @@ custom_rules:
     regex: "DispatchQueue\\.main"
     message: "Use async/await and @MainActor instead of DispatchQueue.main. See CLAUDE.md §11."
     severity: error
+
+  # Prohibit Xcode-generated file header comments.
+  # SwiftFormat (--header strip) removes these automatically on build.
+  # This rule catches any that slip through in manual edits.
+  no_xcode_file_header:
+    name: "Xcode File Header Prohibited"
+    regex: "^\\/\\/\\n\\/\\/  .*\\.swift"
+    message: "Remove the Xcode-generated file header. Files must start with imports. See CLAUDE.md §4."
+    severity: warning
+
+  # Prohibit doc-comments on stored properties.
+  no_property_doc_comment:
+    name: "Property Doc-Comment Prohibited"
+    regex: "^\\s*\\/\\/\\/.*\\n\\s*(private |internal |public |fileprivate )?(var|let) "
+    message: "Do not document stored properties with ///. Use clear naming instead. See CLAUDE.md §4."
+    severity: warning
 
   # Enforce MARK sections in non-trivial types
   mark_required:

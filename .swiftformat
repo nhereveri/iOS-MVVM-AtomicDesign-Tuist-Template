@@ -23,6 +23,13 @@
 
 --emptylines around-conditional-bodies    # Blank line around if/else/guard bodies
 --blanklinesbetweenchainedfunctions false # No extra blanks between chained calls
+--maxblanklines 1                         # Maximum one consecutive blank line anywhere
+
+# ── File Headers ──────────────────────────────────────────────────────────────
+# Strip Xcode-generated file headers entirely.
+# Files must start directly with imports or the first type declaration.
+
+--header strip
 
 # ── Trailing Content ──────────────────────────────────────────────────────────
 

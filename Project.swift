@@ -6,15 +6,15 @@ import ProjectDescription
 // ============================================================
 
 /// Display name of the app (also the Xcode project name).
-let projectName: String = "MyApp"
+let projectName: String = "MyPersonalApp"
 
 /// Reverse-DNS prefix used to build all bundle identifiers.
 /// The production bundle ID will be "\(bundleIdPrefix).\(projectName.lowercased())".
 /// Dev / Staging / UAT append a suffix automatically — see Derived Constants below.
-let bundleIdPrefix: String = "com.yourcompany"
+let bundleIdPrefix: String = "cl.hereveri"
 
 /// Human-readable company / team name (appears in Xcode project settings).
-let organizationName: String = "Your Company"
+let organizationName: String = "Midori App"
 
 /// Version shown to users in the App Store (CFBundleShortVersionString).
 let marketingVersion: String = "1.0.0"
