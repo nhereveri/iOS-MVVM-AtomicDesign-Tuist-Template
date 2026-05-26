@@ -55,29 +55,438 @@ DesignSystem/
 
 ### 2.3 Navigation: NavigationStack + Coordinator
 
-- Each feature declares a `Route` enum conforming to `Hashable`.
-- A `Coordinator` (`@Observable` class) owns the `NavigationPath` and exposes `push(_:)`, `pop()`, `popToRoot()`, and `replace(_:)` methods.
-- The `Coordinator` is injected via SwiftUI `Environment`.
-- Deep links are resolved in the root `AppCoordinator` and forwarded to the relevant feature coordinator.
+Navigation is managed exclusively through the **Coordinator pattern**. No `NavigationLink(destination:)` with inline destination closures, and no `navigationDestination` wired inside a View. Every navigation decision is owned by a `Coordinator` and triggered via a typed `Route` enum.
+
+#### Coordinator contract
+
+Every feature coordinator is a `@MainActor @Observable final class` that owns:
+
+- A `NavigationPath` for push/pop stack navigation.
+- An optional `sheetRoute` property for modal sheet presentation.
+- An optional `fullScreenRoute` property for full-screen cover presentation.
+
+Coordinators are injected via SwiftUI `Environment` so any child Page can trigger navigation without coupling to its parent.
 
 ```swift
-// Example Route
-enum AuthRoute: Hashable {
-    case login
-    case register
-    case forgotPassword(email: String)
-}
+// Sources/Core/Coordinators/Coordinator.swift
 
-// Example Coordinator
-@Observable
-final class AuthCoordinator {
-    var path = NavigationPath()
+/// Base protocol satisfied by every feature coordinator.
+///
+/// Coordinators own navigation state and must never contain business logic.
+/// They are `@MainActor @Observable` classes injected via the SwiftUI Environment.
+@MainActor
+protocol Coordinator: AnyObject { }
+```
 
-    func push(_ route: AuthRoute) { path.append(route) }
-    func pop() { path.removeLast() }
-    func popToRoot() { path.removeLast(path.count) }
+#### Route enums
+
+Each feature declares a `Route` enum conforming to `Hashable`. Routes live in the feature folder alongside the coordinator file.
+
+```swift
+// Features/Home/HomeRoute.swift
+
+/// All destinations reachable inside the Home feature.
+enum HomeRoute: Hashable {
+    case detail(itemID: String)
+    case settings
+    case editProfile(userID: String)
+    case webView(url: URL)
 }
 ```
+
+Rules:
+- Route cases carry only the minimal data needed to build the destination (IDs, not full models).
+- Routes must never reference ViewModel types.
+- Associated values must be `Hashable` and `Sendable`.
+
+---
+
+#### 2.3.1 Feature Coordinator (stack + sheet + fullScreenCover)
+
+```swift
+// Features/Home/HomeCoordinator.swift
+
+/// Owns all navigation state for the Home feature.
+///
+/// Inject via the SwiftUI Environment and call `push(_:)`, `presentSheet(_:)`,
+/// or `presentFullScreen(_:)` from any Page inside the feature.
+///
+/// ## Example
+///
+/// ```swift
+/// @Environment(HomeCoordinator.self) private var coordinator
+/// coordinator.push(.detail(itemID: item.id))
+/// ```
+@MainActor
+@Observable
+final class HomeCoordinator: Coordinator {
+
+    // MARK: - Stack navigation
+
+    var path = NavigationPath()
+
+    // MARK: - Sheet presentation
+
+    var sheetRoute: HomeRoute?
+
+    // MARK: - Full-screen cover
+
+    var fullScreenRoute: HomeRoute?
+
+    // MARK: - Stack interface
+
+    /// Pushes a new destination onto the navigation stack.
+    func push(_ route: HomeRoute)    { path.append(route) }
+
+    /// Pops the top destination from the navigation stack.
+    func pop()                       { if !path.isEmpty { path.removeLast() } }
+
+    /// Pops all destinations, returning to the root.
+    func popToRoot()                 { path.removeLast(path.count) }
+
+    // MARK: - Modal interface
+
+    /// Presents a route as a bottom sheet.
+    func presentSheet(_ route: HomeRoute)      { sheetRoute = route }
+
+    /// Presents a route as a full-screen cover.
+    func presentFullScreen(_ route: HomeRoute) { fullScreenRoute = route }
+
+    /// Dismisses the active sheet.
+    func dismissSheet()                        { sheetRoute = nil }
+
+    /// Dismisses the active full-screen cover.
+    func dismissFullScreen()                   { fullScreenRoute = nil }
+}
+```
+
+The coordinator's owning view wires `NavigationStack`, `.sheet`, and `.fullScreenCover` together:
+
+```swift
+// Features/Home/HomeCoordinatorView.swift
+
+/// Root view for the Home feature. Owns the NavigationStack and all modal presentations.
+///
+/// This is the only view in the Home feature that references the coordinator
+/// directly as an `@State` property. All other views receive it via Environment.
+struct HomeCoordinatorView: View {
+
+    // MARK: - Properties
+
+    @State private var coordinator = HomeCoordinator()
+
+    // MARK: - Body
+
+    var body: some View {
+        NavigationStack(path: $coordinator.path) {
+            HomePage()
+                .navigationDestination(for: HomeRoute.self) { route in
+                    HomeRouter.view(for: route)
+                }
+        }
+        .sheet(item: $coordinator.sheetRoute) { route in
+            HomeRouter.view(for: route)
+        }
+        .fullScreenCover(item: $coordinator.fullScreenRoute) { route in
+            HomeRouter.view(for: route)
+        }
+        .environment(coordinator)
+    }
+}
+```
+
+> **Why a separate `HomeRouter`?** Keeping the mapping from `Route → View` out of the coordinator avoids importing every Page type into the coordinator file and maintains a clean Single Responsibility (Coordinator = state owner; Router = view factory).
+
+```swift
+// Features/Home/HomeRouter.swift
+
+/// Maps a HomeRoute to its corresponding Page view.
+///
+/// Pure factory — no business logic, no mutable state.
+@MainActor
+enum HomeRouter {
+
+    /// Returns the destination view for the given route.
+    @ViewBuilder
+    static func view(for route: HomeRoute) -> some View {
+        switch route {
+        case .detail(let itemID):
+            ItemDetailPage(itemID: itemID)
+        case .settings:
+            SettingsPage()
+        case .editProfile(let userID):
+            EditProfilePage(userID: userID)
+        case .webView(let url):
+            SafariView(url: url)
+                .ignoresSafeArea()
+        }
+    }
+}
+```
+
+---
+
+#### 2.3.2 TabView — AppCoordinator
+
+The root `AppCoordinator` owns the `TabView`. Each tab holds its own independent feature coordinator, so stacks and modal state are fully isolated per tab.
+
+```swift
+// App/AppCoordinator.swift
+
+/// Root coordinator that manages the main TabView and inter-feature navigation.
+///
+/// Deep links enter the app here, are parsed, and forwarded to the relevant
+/// feature coordinator. No feature coordinator should import another.
+@MainActor
+@Observable
+final class AppCoordinator: Coordinator {
+
+    // MARK: - Tab state
+
+    var selectedTab: AppTab = .home
+
+    // MARK: - Feature coordinators (one per tab, lazy so they start fresh)
+
+    let homeCoordinator    = HomeCoordinator()
+    let exploreCoordinator = ExploreCoordinator()
+    let profileCoordinator = ProfileCoordinator()
+
+    // MARK: - Deep link handling
+
+    /// Parses a universal link or custom URL scheme and routes to the correct tab and screen.
+    func handle(deepLink url: URL) {
+        guard let route = DeepLinkParser.parse(url) else { return }
+        switch route {
+        case .homeDetail(let id):
+            selectedTab = .home
+            homeCoordinator.push(.detail(itemID: id))
+        case .profile:
+            selectedTab = .profile
+            profileCoordinator.popToRoot()
+        }
+    }
+}
+
+/// Identifies the tabs available in the main interface.
+enum AppTab: Hashable {
+    case home
+    case explore
+    case profile
+}
+```
+
+```swift
+// App/AppCoordinatorView.swift
+
+/// Root view — wires AppCoordinator to the TabView.
+///
+/// Each tab wraps a `{Feature}CoordinatorView`, not a raw Page,
+/// so every tab owns an independent NavigationStack.
+struct AppCoordinatorView: View {
+
+    // MARK: - Properties
+
+    @State private var coordinator = AppCoordinator()
+
+    // MARK: - Body
+
+    var body: some View {
+        TabView(selection: $coordinator.selectedTab) {
+            Tab("home.tab.title", systemImage: "house", value: AppTab.home) {
+                HomeCoordinatorView()
+                    .environment(coordinator.homeCoordinator)
+            }
+            Tab("explore.tab.title", systemImage: "magnifyingglass", value: AppTab.explore) {
+                ExploreCoordinatorView()
+                    .environment(coordinator.exploreCoordinator)
+            }
+            Tab("profile.tab.title", systemImage: "person", value: AppTab.profile) {
+                ProfileCoordinatorView()
+                    .environment(coordinator.profileCoordinator)
+            }
+        }
+        .environment(coordinator)
+        .onOpenURL { url in
+            coordinator.handle(deepLink: url)
+        }
+    }
+}
+```
+
+Rules for TabView:
+- Each `Tab` wraps a `{Feature}CoordinatorView`, never a raw Page.
+- Tab labels use String Catalog keys — never hardcoded strings.
+- `AppCoordinator` is in the Environment so any nested View can switch tabs without coupling to the parent hierarchy.
+- Tab badge counts and visibility are properties on `AppCoordinator`, not on individual Pages.
+
+---
+
+#### 2.3.3 Sheet presentation
+
+Sheets are driven by the feature coordinator's `sheetRoute` state. The pattern mirrors stack navigation: routes describe the destination, the coordinator owns the boolean-like state (via an `Optional<Route>`), and the CoordinatorView renders it.
+
+```swift
+// Triggering a sheet from a Page
+struct HomePage: View {
+
+    @Environment(HomeCoordinator.self) private var coordinator
+
+    var body: some View {
+        Button(String(localized: "profile.button.edit")) {
+            coordinator.presentSheet(.editProfile(userID: currentUserID))
+        }
+    }
+}
+```
+
+For sheets that need their **own navigation stack** (e.g., a multi-step modal flow), wrap the sheet content in a new `NavigationStack`:
+
+```swift
+.sheet(item: $coordinator.sheetRoute) { route in
+    NavigationStack {
+        HomeRouter.view(for: route)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "common.button.cancel")) {
+                        coordinator.dismissSheet()
+                    }
+                }
+            }
+    }
+}
+```
+
+Rules for sheets:
+- Use `.sheet` for non-critical, user-dismissible flows (edit forms, previews, filter pickers).
+- Use `.fullScreenCover` for immersive flows where the parent context must not be visible (onboarding steps, paywall, camera, media player).
+- Always bind to a coordinator-owned `Optional<Route>` — never use a raw `@State var isPresented: Bool` in a Page.
+- A sheet's dismiss button must call `coordinator.dismissSheet()`, not rely solely on SwiftUI's implicit swipe-to-dismiss, so the coordinator state stays consistent.
+- If a sheet spawns its own coordinator for a multi-step flow, that coordinator is owned as `@State` inside the sheet's root view, following the same pattern as a feature CoordinatorView.
+
+---
+
+#### 2.3.4 WebView presentation
+
+Web content is presented via one of two purpose-built Atoms:
+
+| Atom | Underlying type | When to use |
+|---|---|---|
+| `SafariView` | `SFSafariViewController` | External URLs — terms, help articles, OAuth flows |
+| `WebView` | `WKWebView` | Controlled in-app content requiring JS injection or cookie management |
+
+**SafariView — external URLs**
+
+```swift
+// DesignSystem/Atoms/SafariView.swift
+
+import SafariServices
+import SwiftUI
+
+/// Wraps `SFSafariViewController` for presenting external URLs inside the app.
+///
+/// Use for terms of service, help articles, and any URL where full browser
+/// controls are appropriate. Prefer this over opening Safari externally
+/// unless the user explicitly requests it.
+///
+/// ## Example
+///
+/// ```swift
+/// coordinator.presentSheet(.webView(url: termsURL))
+/// ```
+struct SafariView: UIViewControllerRepresentable {
+
+    // MARK: - Properties
+
+    let url: URL
+
+    // MARK: - UIViewControllerRepresentable
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) { }
+}
+```
+
+**WebView — controlled in-app content**
+
+Use `WKWebView` only when `SafariView` is insufficient, for example when JavaScript injection, custom request headers, or `WKScriptMessageHandler` callbacks are required.
+
+```swift
+// DesignSystem/Atoms/WebView.swift
+
+import WebKit
+import SwiftUI
+
+/// Wraps `WKWebView` for presenting controlled in-app web content.
+///
+/// Use only when `SafariView` is insufficient — for example, when custom headers,
+/// JavaScript injection, or `WKScriptMessageHandler` callbacks are required.
+///
+/// - Important: Pass a pre-configured `WKWebViewConfiguration` from the call site;
+///   do not configure the web view inside this struct.
+struct WebView: UIViewRepresentable {
+
+    // MARK: - Properties
+
+    let request: URLRequest
+    var configuration: WKWebViewConfiguration = .init()
+
+    // MARK: - UIViewRepresentable
+
+    func makeUIView(context: Context) -> WKWebView {
+        WKWebView(frame: .zero, configuration: configuration)
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        webView.load(request)
+    }
+}
+```
+
+Wiring web routes in the coordinator:
+
+```swift
+// In the feature Route enum
+enum HomeRoute: Hashable {
+    // … existing cases …
+    case webView(url: URL)       // SafariView
+    case inAppWeb(url: URL)      // WebView (WKWebView), use only when required
+}
+
+// In HomeRouter
+case .webView(let url):
+    SafariView(url: url)
+        .ignoresSafeArea()
+
+case .inAppWeb(let url):
+    WebView(request: URLRequest(url: url))
+        .ignoresSafeArea()
+```
+
+Rules for WebViews:
+- Prefer `SafariView` for all external URLs — it provides reader mode, content blockers, and the system share sheet for free.
+- Use `WebView` only when JavaScript bridging or cookie management is required; document the reason in the route declaration.
+- Never call `UIApplication.shared.open(_:)` from a ViewModel or UseCase — route the URL through the coordinator.
+- Both `SafariView` and `WebView` are **Atoms** — they contain zero business logic and live in `DesignSystem/Atoms/`.
+- `WKWebView` navigation events that affect app state (e.g., OAuth callback URL detection) are handled by a `WKNavigationDelegate` set up in the `makeUIView` coordinator, not in the View or ViewModel.
+
+---
+
+#### 2.3.5 Rules summary — Navigation
+
+| Rule | Rationale |
+|---|---|
+| Navigation is always coordinator-driven | Views cannot import other feature Views; navigation decisions stay out of the UI layer |
+| Routes carry IDs and primitive values, not full models | Keeps `Hashable` conformance trivial and avoids accidental data sharing |
+| `NavigationLink(destination:)` with inline closures is forbidden | Destination logic leaks into the View layer |
+| `NavigationLink(value:)` is permitted only inside `navigationDestination` wired by a CoordinatorView | Keeps destination mapping centralised in the Router |
+| Sheet and fullScreenCover state lives in the coordinator, not the View | Enables programmatic dismiss from any child screen |
+| Each tab owns an independent coordinator and `NavigationPath` | Switching tabs never resets another tab's navigation stack |
+| `AppCoordinator` is the sole entry point for deep links | Single point of URL parsing and cross-feature routing |
+| `SafariView` and `WebView` are Atoms | Reusable across features with zero business logic |
+| A sheet that starts a multi-step flow owns a new coordinator as `@State` in its root view | Multi-step modal flows are self-contained and independently testable |
 
 ---
 
